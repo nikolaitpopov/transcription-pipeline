@@ -1,0 +1,28 @@
+version: "3.9"
+
+# GPU override for VPS deployment.
+# Usage: docker compose -f docker-compose.yml -f docker-compose.gpu.yml up -d
+
+x-gpu: &gpu
+  deploy:
+    resources:
+      reservations:
+        devices:
+          - driver: nvidia
+            count: 1
+            capabilities: [gpu]
+
+services:
+  transcriber:
+    image: nvidia/cuda:12.3.2-cudnn9-runtime-ubuntu22.04
+    build:
+      context: .
+      dockerfile: Dockerfile.gpu
+    <<: *gpu
+
+  diarizer:
+    image: nvidia/cuda:12.3.2-cudnn9-runtime-ubuntu22.04
+    build:
+      context: .
+      dockerfile: Dockerfile.gpu
+    <<: *gpu
