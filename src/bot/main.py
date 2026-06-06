@@ -2,13 +2,17 @@
 
 import asyncio
 import logging
+import os
 from aiogram import Bot, Dispatcher
 from aiogram.client.default import DefaultBotProperties
+from aiogram.client.session.aiohttp import AiohttpSession
 from aiogram.enums import ParseMode
 
 from src.config import TELEGRAM_BOT_TOKEN
 from src.bot.db import init_db
 from src.bot.handlers import router
+
+PROXY_URL = os.getenv("TELEGRAM_PROXY_URL")
 
 # Configure logging
 logging.basicConfig(
@@ -25,8 +29,16 @@ async def main():
     await init_db()
     
     # Initialize bot and dispatcher
+    session = None
+    if PROXY_URL:
+        from aiohttp_socks import ProxyConnector
+        connector = ProxyConnector.from_url(PROXY_URL)
+        session = AiohttpSession(connector=connector)
+        logger.info("Using proxy: %s", PROXY_URL)
+
     bot = Bot(
         token=TELEGRAM_BOT_TOKEN,
+        session=session,
         default=DefaultBotProperties(parse_mode=ParseMode.HTML)
     )
     dp = Dispatcher()
