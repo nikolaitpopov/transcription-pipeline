@@ -31,9 +31,15 @@ async def main():
     # Initialize bot and dispatcher
     session = None
     if PROXY_URL:
+        import aiohttp
         from aiohttp_socks import ProxyConnector
-        connector = ProxyConnector.from_url(PROXY_URL)
-        session = AiohttpSession(connector=connector)
+
+        class SocksSession(AiohttpSession):
+            async def create_session(self) -> aiohttp.ClientSession:
+                connector = ProxyConnector.from_url(PROXY_URL)
+                return aiohttp.ClientSession(connector=connector)
+
+        session = SocksSession()
         logger.info("Using proxy: %s", PROXY_URL)
 
     bot = Bot(
