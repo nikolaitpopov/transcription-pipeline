@@ -109,65 +109,43 @@ async def _set_status(job_id: int, status: str, error_message: str | None = None
 
 async def run_worker():
     RESULTS_DIR.mkdir(parents=True, exist_ok=True)
-    bot = Bot(token=TELEGRAM_BOT_TOKEN)
     logger.info("Sender worker started")
 
-    try:
-        while True:
-            job = None
-            try:
-                job = await _fetch_diarized_job()
-                if job is None:
-                    await asyncio.sleep(POLL_INTERVAL)
-                    continue
+    while True:
+        job = None
+        try:
+            job = await _fetch_diarized_job()
+            if job is None:
+                await asyncio.sleep(POLL_INTERVAL)
+                continue
 
-                job_id = job["id"]
-                chat_id = job["telegram_chat_id"]
-                logger.info("Sending job %d to chat %d", job_id, chat_id)
+            job_id = job["id"]
+            logger.info("Processing job %d", job_id)
 
-                await _set_status(job_id, "sending")
+            await _set_status(job_id, "sending")
 
-                # Load diarized JSON
-                diarized_path = TRANSCRIPTS_DIR / f"{job_id}_diarized.json"
-                with open(diarized_path, encoding="utf-8") as f:
-                    data = json.load(f)
+            # Load diarized JSON
+            diarized_path = TRANSCRIPTS_DIR / f"{job_id}_diarized.json"
+            with open(diarized_path, encoding="utf-8") as f:
+                data = json.load(f)
 
-                # Generate MD
-                now = datetime.now(timezone.utc)
-                md_content = _generate_md(data, job_id, now)
+            # Generate MD and save
+            now = datetime.now(timezone.utc)
+            md_content = _generate_md(data, job_id, now)
 
-                date_tag = now.strftime("%Y%m%d")
-                filename = f"transcript_{date_tag}_{job_id}.md"
+            out_path = RESULTS_DIR / f"{job_id}_transcript.md"
+            out_path.write_text(md_content, encoding="utf-8")
+            logger.info("Job %d saved to %s", job_id, out_path)
 
-                out_path = RESULTS_DIR / f"{job_id}_transcript.md"
-                out_path.write_text(md_content, encoding="utf-8")
+            await _set_status(job_id, "done")
 
-                # Send via Telegram
-                duration_str = _fmt_duration(data["duration_seconds"])
-                speakers_count = data["speakers_count"]
+        except Exception as exc:
+            logger.error("Sender job %s failed: %s",
+                         job["id"] if job else "?", exc, exc_info=True)
+            if job:
+                await _set_status(job["id"], "error", str(exc))
 
-                await bot.send_document(
-                    chat_id=chat_id,
-                    document=BufferedInputFile(md_content.encode("utf-8"), filename=filename),
-                    caption=(
-                        f"✅ Готово! Транскрипция звонка #{job_id}\n"
-                        f"📊 Длительность: {duration_str}\n"
-                        f"👥 Спикеров: {speakers_count}"
-                    ),
-                )
-                logger.info("Job %d sent to chat %d as %s", job_id, chat_id, filename)
-
-                await _set_status(job_id, "done")
-
-            except Exception as exc:
-                logger.error("Sender job %s failed: %s",
-                             job["id"] if job else "?", exc, exc_info=True)
-                if job:
-                    await _set_status(job["id"], "error", str(exc))
-
-            await asyncio.sleep(POLL_INTERVAL)
-    finally:
-        await bot.session.close()
+        await asyncio.sleep(POLL_INTERVAL)
 
 
 if __name__ == "__main__":
