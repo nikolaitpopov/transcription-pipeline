@@ -22,6 +22,7 @@ logger = logging.getLogger(__name__)
 app = FastAPI(title="Transcription Pipeline API")
 
 TRANSCRIPTS_DIR = DATA_DIR / "transcripts"
+RESULTS_DIR = DATA_DIR / "results"
 
 
 @app.post("/jobs", status_code=201)
@@ -83,7 +84,7 @@ async def get_job(job_id: int):
 
     # If done, check for result file
     if job["status"] == "done":
-        md_path = TRANSCRIPTS_DIR / f"{job_id}_result.md"
+        md_path = RESULTS_DIR / f"{job_id}_transcript.md"
         if md_path.exists():
             result["result_available"] = True
             result["download_url"] = f"/jobs/{job_id}/file"
@@ -108,7 +109,7 @@ async def download_result(job_id: int):
     if job["status"] != "done":
         raise HTTPException(400, f"Job not done yet (status: {job['status']})")
 
-    md_path = TRANSCRIPTS_DIR / f"{job_id}_result.md"
+    md_path = RESULTS_DIR / f"{job_id}_transcript.md"
     if not md_path.exists():
         raise HTTPException(404, "Result file not found")
 
