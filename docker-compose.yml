@@ -35,6 +35,16 @@ services:
       - data:/var/data
     restart: unless-stopped
 
+  api:
+    build: .
+    command: python -m src.api.main
+    env_file: .env
+    ports:
+      - "8000:8000"
+    volumes:
+      - data:/var/data
+    restart: unless-stopped
+
 volumes:
   data:
     driver: local
