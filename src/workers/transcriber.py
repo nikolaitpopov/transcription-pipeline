@@ -2,14 +2,14 @@
 Task 02 — Transcription worker.
 
 Polls the jobs queue for pending entries, transcribes audio with faster-whisper
-in a separate process (ProcessPoolExecutor) and saves the result as JSON.
+in a thread (ThreadPoolExecutor) and saves the result as JSON.
 """
 
 import asyncio
 import json
 import logging
 import os
-from concurrent.futures import ProcessPoolExecutor
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -25,11 +25,11 @@ TRANSCRIPTS_DIR = DATA_DIR / "transcripts"
 POLL_INTERVAL = 5  # seconds
 
 
-# ── Transcription (runs in a subprocess) ─────────────────────────────────────
+# ── Transcription (runs in a thread) ─────────────────────────────────────────
 
 def _transcribe_sync(audio_path: str, job_id: int) -> dict:
     """
-    Runs inside ProcessPoolExecutor — no async here.
+    Runs inside ThreadPoolExecutor — no async here.
     Returns the transcript dict ready to be written as JSON.
     """
     from faster_whisper import WhisperModel
@@ -95,9 +95,10 @@ async def run_worker():
     )
 
     loop = asyncio.get_running_loop()
-    executor = ProcessPoolExecutor(max_workers=1)
+    executor = ThreadPoolExecutor(max_workers=1)
 
     while True:
+        job = None
         try:
             job = await _fetch_pending_job()
             if job is None:
@@ -110,7 +111,7 @@ async def run_worker():
 
             await _set_status(job_id, "transcribing")
 
-            # Run blocking transcription in a subprocess
+            # Run blocking transcription in a thread (inherits env vars unlike subprocess)
             result = await loop.run_in_executor(
                 executor,
                 _transcribe_sync,
