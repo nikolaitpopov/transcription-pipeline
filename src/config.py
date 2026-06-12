@@ -8,9 +8,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 # Telegram bot configuration
-TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
-if not TELEGRAM_BOT_TOKEN:
-    raise ValueError("TELEGRAM_BOT_TOKEN environment variable is required")
+TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "")
 
 ALLOWED_CHAT_ID = os.getenv("ALLOWED_CHAT_ID")
 if ALLOWED_CHAT_ID:
