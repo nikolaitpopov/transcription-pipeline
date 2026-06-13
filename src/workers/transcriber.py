@@ -3,6 +3,7 @@ Task 02 — Transcription worker.
 
 Polls the jobs queue for pending entries, transcribes audio with faster-whisper
 in a thread (ThreadPoolExecutor) and saves the result as JSON.
+Model is loaded once at startup and reused for all jobs.
 """
 
 import asyncio
@@ -24,21 +25,32 @@ WHISPER_COMPUTE_TYPE = os.getenv("WHISPER_COMPUTE_TYPE", "float16")
 TRANSCRIPTS_DIR = DATA_DIR / "transcripts"
 POLL_INTERVAL = 5  # seconds
 
+# Global model instance — loaded once, reused for all jobs
+_model = None
+
+
+def _get_model():
+    global _model
+    if _model is None:
+        from faster_whisper import WhisperModel
+        logger.info("Loading Whisper model %s on %s...", WHISPER_MODEL, WHISPER_DEVICE)
+        _model = WhisperModel(
+            WHISPER_MODEL,
+            device=WHISPER_DEVICE,
+            compute_type=WHISPER_COMPUTE_TYPE,
+        )
+        logger.info("Whisper model loaded.")
+    return _model
+
 
 # ── Transcription (runs in a thread) ─────────────────────────────────────────
 
 def _transcribe_sync(audio_path: str, job_id: int) -> dict:
     """
     Runs inside ThreadPoolExecutor — no async here.
-    Returns the transcript dict ready to be written as JSON.
+    Uses global model instance to avoid reloading on every job.
     """
-    from faster_whisper import WhisperModel
-
-    model = WhisperModel(
-        WHISPER_MODEL,
-        device=WHISPER_DEVICE,
-        compute_type=WHISPER_COMPUTE_TYPE,
-    )
+    model = _get_model()
 
     segments_iter, info = model.transcribe(
         audio_path,
@@ -96,6 +108,9 @@ async def run_worker():
 
     loop = asyncio.get_running_loop()
     executor = ThreadPoolExecutor(max_workers=1)
+
+    # Preload model at startup
+    await loop.run_in_executor(executor, _get_model)
 
     while True:
         job = None
