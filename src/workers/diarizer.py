@@ -83,7 +83,18 @@ def _diarize_sync(audio_path: str, job_id: int, whisper_json_path: str) -> dict:
 
     import torch
     import soundfile as sf
-    samples, sample_rate = sf.read(audio_path, dtype="float32", always_2d=True)
+    import subprocess
+    import tempfile
+
+    # Convert to WAV via ffmpeg (soundfile doesn't support MP3/MP4/etc.)
+    with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as tmp:
+        tmp_path = tmp.name
+    subprocess.run(
+        ["ffmpeg", "-y", "-i", audio_path, "-ar", "16000", "-ac", "1", tmp_path],
+        check=True, capture_output=True,
+    )
+    samples, sample_rate = sf.read(tmp_path, dtype="float32", always_2d=True)
+    os.unlink(tmp_path)
     waveform = torch.from_numpy(samples.T)
     audio_dict = {"waveform": waveform, "sample_rate": sample_rate}
     diarization_result = pipeline(audio_dict)
